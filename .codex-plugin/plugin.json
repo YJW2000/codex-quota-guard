@@ -1,0 +1,18 @@
+{
+  "name": "codex-quota-guard",
+  "version": "0.1.0",
+  "description": "本机 Codex 额度监控、暂停与续跑",
+  "author": { "name": "YJW2000" },
+  "skills": "./skills",
+  "mcpServers": "./mcp.json",
+  "interface": {
+    "displayName": "Codex 额度守卫",
+    "shortDescription": "低额度暂停，窗口恢复自动续跑",
+    "developerName": "YJW2000",
+    "category": "Developer Tools",
+    "capabilities": [],
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": "查看额度守卫状态和待恢复任务。"
+  }
+}
