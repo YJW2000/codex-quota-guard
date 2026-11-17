@@ -1,65 +1,57 @@
 param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'CodexQuotaGuard\app'),
     [string]$StateDir = (Join-Path $env:LOCALAPPDATA 'CodexQuotaGuard'),
-    [string]$BackendPath = $env:CODEX_APP_RUNTIME_CLI_PATH,
+    [string]$BackendPath,
     [switch]$SkipTests,
-    [switch]$NoActivate,
-    [switch]$SkipPluginInstall
+    [switch]$RegisterPlugin,
+    [switch]$AutoStart,
+    [string]$StartupDir = [Environment]::GetFolderPath('Startup')
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'migration.ps1')
+. (Join-Path $PSScriptRoot 'lifecycle.ps1')
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$InstallRoot = [IO.Path]::GetFullPath($InstallRoot); $StateDir = [IO.Path]::GetFullPath($StateDir)
+Assert-OwnInstallRoot $InstallRoot
+# Run repair even offline. Only exact legacy paths may change.
+Repair-LegacyOverride $InstallRoot $StateDir | Format-Table -AutoSize
+if ($StateDir -eq [IO.Path]::GetPathRoot($StateDir) -or (Test-Path -LiteralPath (Join-Path $StateDir 'auth.json')) -or $StateDir -eq (Join-Path $env:USERPROFILE '.codex')) { throw 'Monitor data must use a dedicated directory, not CODEX_HOME.' }
 $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
-if (-not $BackendPath) { $BackendPath = (Get-Command codex.exe -ErrorAction Stop).Source }
-$BackendPath = (Resolve-Path -LiteralPath $BackendPath).Path
-if ([IO.Path]::GetFileName($BackendPath) -eq 'codex-quota-bridge.exe') { throw 'Provide the original Codex backend using -BackendPath.' }
-$InstallRoot = [IO.Path]::GetFullPath($InstallRoot)
-$StateDir = [IO.Path]::GetFullPath($StateDir)
-if ($InstallRoot -eq [IO.Path]::GetPathRoot($InstallRoot) -or $StateDir -eq [IO.Path]::GetPathRoot($StateDir)) { throw 'Invalid install location.' }
+if (-not $BackendPath) { $BackendPath = $env:CODEX_APP_RUNTIME_CLI_PATH }
+if (-not $BackendPath) { $command = Get-Command codex.exe -ErrorAction SilentlyContinue; if ($command) { $BackendPath = $command.Source } }
+if ($BackendPath -match '(^|[\\/])codex-quota-(bridge|monitor)\.exe$') { $BackendPath = $null }
 if (-not $SkipTests) {
-    & $nodePath (Join-Path $projectRoot 'scripts\check.mjs')
-    if ($LASTEXITCODE -ne 0) { throw 'Source verification failed.' }
-    & $nodePath (Join-Path $projectRoot 'scripts\test.mjs')
-    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+    & $nodePath (Join-Path $projectRoot 'scripts\check.mjs'); if ($LASTEXITCODE -ne 0) { throw 'Source verification failed.' }
+    & $nodePath (Join-Path $projectRoot 'scripts\test.mjs'); if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 }
 & (Join-Path $projectRoot 'scripts\build.ps1') -ProjectRoot $projectRoot
-if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
-$probeLines = & $nodePath (Join-Path $projectRoot 'scripts\doctor.mjs') --backend $BackendPath
-if ($LASTEXITCODE -ne 0) { throw 'Codex protocol compatibility check failed; no startup settings changed.' }
-$probe = ($probeLines | Select-Object -Last 1) | ConvertFrom-Json
-if (-not $probe.compatible) { throw 'Incompatible Codex engine.' }
-
 New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
 $quotaSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 & icacls.exe $StateDir /inheritance:r /grant:r "*$($quotaSid):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Unable to restrict runtime data access.' }
+if ($LASTEXITCODE -ne 0) { throw 'Unable to restrict monitor data access.' }
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
-$backupPath = Join-Path $StateDir 'install-backup.json'
-$utf8 = New-Object Text.UTF8Encoding($false)
-if (-not (Test-Path -LiteralPath $backupPath)) {
-    $backup = @{ previousCliPath = [Environment]::GetEnvironmentVariable('CODEX_CLI_PATH', 'User'); recordedAt = [DateTime]::UtcNow.ToString('o') }
-    [IO.File]::WriteAllText($backupPath, ($backup | ConvertTo-Json), $utf8)
-}
-foreach ($entry in @('src', 'native', 'scripts', 'skills', 'assets', 'dist', '.codex-plugin', '.agents', 'plugin.json', 'mcp.json', 'package.json', 'README.md')) {
+foreach ($entry in @('src','native','scripts','skills','assets','docs','.codex-plugin','.agents','plugin.json','mcp.json','package.json','README.md')) {
     $source = Join-Path $projectRoot $entry
     if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $InstallRoot -Recurse -Force }
 }
-$nativePath = Join-Path $InstallRoot 'dist\codex-quota-bridge.exe'
-$settings = @{ root = $InstallRoot; stateDir = $StateDir; backendPath = $BackendPath; nodePath = $nodePath; nativePath = $nativePath; testedEngineVersion = $probe.version; trayEnabled = (-not $NoActivate) }
-[IO.File]::WriteAllText((Join-Path $InstallRoot 'installation.json'), ($settings | ConvertTo-Json), $utf8)
-$mcpPath = Join-Path $InstallRoot 'mcp.json'
-$mcpSettings = Get-Content -LiteralPath $mcpPath -Raw | ConvertFrom-Json
-$mcpSettings.mcpServers.'quota-guard' | Add-Member -MemberType NoteProperty -Name env -Value @{ CODEX_QUOTA_GUARD_HOME = $StateDir } -Force
-[IO.File]::WriteAllText($mcpPath, ($mcpSettings | ConvertTo-Json -Depth 20), $utf8)
-
-if (-not $SkipPluginInstall) {
-    & $BackendPath plugin marketplace add $InstallRoot --json
-    if ($LASTEXITCODE -ne 0) { throw 'Marketplace registration failed; startup unchanged.' }
-    & $BackendPath plugin add 'codex-quota-guard@quota-guard-local' --json
-    if ($LASTEXITCODE -ne 0) { throw 'Plugin installation failed; startup unchanged.' }
+New-Item -ItemType Directory -Path (Join-Path $InstallRoot 'dist') -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'dist\codex-quota-monitor.exe') -Destination (Join-Path $InstallRoot 'dist') -Force
+# Retire known owned v0.1 executables and interception code, without touching data.
+foreach ($relative in @('src\bridge.mjs','src\controller.mjs','dist\codex-quota-bridge.exe','native\Launcher.cs')) {
+    $target = [IO.Path]::GetFullPath((Join-Path $InstallRoot $relative))
+    if (-not $target.StartsWith($InstallRoot.TrimEnd([IO.Path]::DirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe legacy path.' }
+    if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force }
 }
-if (-not $NoActivate) {
-    [Environment]::SetEnvironmentVariable('CODEX_CLI_PATH', $nativePath, 'User')
-    Write-Output 'Installed and configured. Fully exit Codex and reopen it to protect desktop tasks.'
-} else { Write-Output 'Installed without changing CODEX_CLI_PATH.' }
-Write-Output "Launcher: $nativePath"
-Write-Output "Runtime data: $StateDir"
+$utf8 = New-Object Text.UTF8Encoding($false)
+$settings = @{ root=$InstallRoot; stateDir=$StateDir; backendPath=$BackendPath; nodePath=$nodePath; nativePath=(Join-Path $InstallRoot 'dist\codex-quota-monitor.exe'); mode='independent-monitor'; version='0.2.0' }
+[IO.File]::WriteAllText((Join-Path $InstallRoot 'installation.json'),($settings|ConvertTo-Json),$utf8)
+$mcpPath = Join-Path $InstallRoot 'mcp.json'; $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$mcp.mcpServers.'quota-guard' | Add-Member NoteProperty env @{ CODEX_QUOTA_GUARD_HOME=$StateDir } -Force
+[IO.File]::WriteAllText($mcpPath,($mcp|ConvertTo-Json -Depth 20),$utf8)
+if ($AutoStart) { Set-MonitorStartup $settings.nativePath $StartupDir $true }
+if ($RegisterPlugin) {
+    if (-not $BackendPath) { throw 'Original CLI unavailable; standalone monitor installed. Plugin registration was not attempted.' }
+    & $BackendPath plugin marketplace add $InstallRoot --json; if ($LASTEXITCODE -ne 0) { throw 'Own marketplace registration failed.' }
+    & $BackendPath plugin add 'codex-quota-guard@quota-guard-local' --json; if ($LASTEXITCODE -ne 0) { throw 'Own plugin registration failed.' }
+}
+Write-Output 'Independent monitor installed. Codex launch is unchanged. Start monitoring separately using start-monitor.ps1.'

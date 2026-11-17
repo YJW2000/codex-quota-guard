@@ -1,22 +1,30 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-quota-guard",
-  "version": "0.1.0",
-  "description": "本机 Codex 额度监控、低额度暂停与窗口恢复后续跑。需要安装 Windows 启动桥接组件。",
-  "author": { "name": "YJW2000" },
-  "keywords": ["codex", "quota", "windows", "pause", "resume"],
+  "version": "0.2.0",
+  "description": "独立只读额度监控；不接管 Codex 启动或任务",
+  "author": {
+    "name": "YJW2000"
+  },
+  "keywords": [
+    "codex",
+    "quota",
+    "windows",
+    "monitor",
+    "read-only"
+  ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Codex 额度守卫",
-        "shortDescription": "低额度暂停，窗口恢复自动续跑",
-        "longDescription": "配合本机桥接组件监控所有订阅额度窗口，默认剩余 5% 时暂停，真实额度恢复后在原聊天续跑。",
+        "shortDescription": "独立额度监控，启动互不影响",
+        "longDescription": "独立进程只读查询额度；故障显示暂不可用，不阻断桌面启动、登录或任务。",
         "developerName": "YJW2000",
         "category": "Developer Tools",
         "capabilities": [],
         "logo": "./assets/icon.svg",
         "composerIcon": "./assets/icon.svg",
-        "defaultPrompt": "查看额度守卫状态和待恢复任务。"
+        "defaultPrompt": "查看独立额度监控状态。"
       }
     }
   }

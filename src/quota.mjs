@@ -1,52 +1,29 @@
-export const DEFAULT_CONFIG = Object.freeze({
-  enabled: true, reservePercent: 5, fastAtPercent: 15,
-  pollMs: 30_000, fastPollMs: 5_000, staleMs: 65_000,
-  preventSleep: true,
-});
-
+export const DEFAULT_CONFIG = Object.freeze({ enabled: true, reservePercent: 5, pollMs: 30000, timeoutMs: 12000, staleMs: 65000 });
 export function validateConfig(patch) {
-  const allowed = new Set(Object.keys(DEFAULT_CONFIG));
-  for (const [key, value] of Object.entries(patch)) {
-    if (!allowed.has(key)) throw new Error(`Unknown setting: ${key}`);
-    if (typeof DEFAULT_CONFIG[key] === 'boolean') {
-      if (typeof value !== 'boolean') throw new Error(`${key} must be boolean`);
-    } else if (!Number.isFinite(value)) throw new Error(`${key} must be finite`);
+  for (const [key,value] of Object.entries(patch)) {
+    if (!(key in DEFAULT_CONFIG)) throw new Error(`Unknown setting: ${key}`);
+    if (key === 'enabled' ? typeof value !== 'boolean' : !Number.isFinite(value)) throw new Error(`Invalid setting: ${key}`);
   }
-  const config = { ...DEFAULT_CONFIG, ...patch };
-  if (config.reservePercent < 1 || config.reservePercent > 50) throw new Error('Reserve must be 1–50%');
-  if (config.fastAtPercent < config.reservePercent || config.fastAtPercent > 100) throw new Error('Invalid fast threshold');
-  if (config.fastPollMs < 1000 || config.pollMs < config.fastPollMs || config.staleMs < config.pollMs) throw new Error('Invalid polling intervals');
-  return config;
+  const c={...DEFAULT_CONFIG,...patch};
+  if(c.reservePercent<1 || c.reservePercent>50 || c.pollMs<1000 || c.timeoutMs<100 || c.timeoutMs>30000 || c.staleMs<c.pollMs) throw new Error('Invalid monitor settings');
+  return c;
 }
-
-export function evaluateQuota(snapshot, config = DEFAULT_CONFIG, now = Date.now()) {
-  const rows = [];
-  const buckets = snapshot?.rateLimitsByLimitId;
-  const entries = buckets && Object.keys(buckets).length
-    ? Object.entries(buckets) : snapshot?.rateLimits ? [['codex', snapshot.rateLimits]] : [];
-  let backendBlocked = snapshot?.ordinaryUsageAllowed === false;
-  for (const [limitId, bucket] of entries) {
-    if (!bucket) continue;
-    backendBlocked ||= bucket.spendControlReached === true || Boolean(bucket.rateLimitReachedType);
-    for (const name of ['primary', 'secondary', 'individualLimit']) {
-      const window = bucket[name];
-      if (!window) continue;
-      const raw = name === 'individualLimit' ? window.remainingPercent
-        : typeof window.usedPercent === 'number' ? 100 - window.usedPercent : null;
-      if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
-      rows.push({ limitId, name, remainingPercent: Math.max(0, Math.min(100, raw)),
-        windowDurationMins: window.windowDurationMins ?? null,
-        resetsAt: typeof window.resetsAt === 'number' ? window.resetsAt : null });
+export function unavailable(reason='监控连接暂不可用') { return {state:'unavailable',label:'暂不可用',windows:[],reason,checkedAt:null}; }
+export function evaluateQuota(snapshot,config=DEFAULT_CONFIG,now=Date.now()) {
+  if(!snapshot?.accountId || typeof snapshot.ordinaryUsageAllowed !== 'boolean') return unavailable('无法确认账号或额度权限');
+  const buckets=snapshot.rateLimitsByLimitId;
+  const entries=buckets && Object.keys(buckets).length ? Object.entries(buckets) : [['codex',snapshot.rateLimits]];
+  const windows=[]; let blocked=!snapshot.ordinaryUsageAllowed;
+  for(const [limitId,bucket] of entries) {
+    if(!bucket) continue;
+    blocked ||= Boolean(bucket.spendControlReached || bucket.rateLimitReachedType);
+    for(const name of ['primary','secondary','individualLimit']) {
+      const w=bucket[name]; const remaining=name==='individualLimit' ? w?.remainingPercent : typeof w?.usedPercent==='number' ? 100-w.usedPercent : null;
+      if(!Number.isFinite(remaining) || remaining<0 || remaining>100) continue;
+      windows.push({limitId,name,remainingPercent:remaining,resetsAt:Number.isFinite(w.resetsAt)?w.resetsAt:null,windowDurationMins:w.windowDurationMins??null});
     }
   }
-  const blocking = rows.filter(row => row.remainingPercent <= config.reservePercent);
-  // Permission is authoritative: percentages alone do not establish recovery.
-  const known = rows.length > 0 && typeof snapshot?.ordinaryUsageAllowed === 'boolean' && Boolean(snapshot?.accountId);
-  const state = !known ? 'unknown' : backendBlocked || blocking.length ? 'paused' : 'running';
-  const resetTimes = blocking.map(row => row.resetsAt * 1000).filter(t => t > now);
-  const near = rows.some(row => row.remainingPercent <= config.fastAtPercent);
-  const interval = near || state !== 'running' ? config.fastPollMs : config.pollMs;
-  return { state, windows: rows, blocking, reason: state === 'unknown' ? '额度或账号权限尚未确认'
-    : state === 'paused' ? backendBlocked ? '账号当前不允许使用订阅额度' : `剩余额度不超过 ${config.reservePercent}%` : null,
-    checkedAt: now, nextCheckAt: Math.min(now + interval, ...resetTimes.map(t => t + 1000)) };
+  if(!windows.length) return unavailable('未取得可用的额度窗口');
+  const low=blocked || windows.some(w=>w.remainingPercent<=config.reservePercent);
+  return {state:low?'low':'available',label:low?'额度偏低':'额度可用',windows,checkedAt:now,reason:blocked?'账号当前不允许使用订阅额度':null};
 }

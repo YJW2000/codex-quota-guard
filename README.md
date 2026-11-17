@@ -1,90 +1,65 @@
-# Codex 额度守卫
+# Codex 额度守卫 0.2 — 独立只读监控
 
-Windows 本地插件。监控当前账号的 Codex 订阅额度，在剩余 **5%** 时中断本机桌面版任务，等待真实额度恢复，再在原聊天继续执行。监控、等待和调度均不调用模型。
+此版本移除 0.1 的桌面启动接管。**不会设置用户级或系统级 CODEX_CLI_PATH，不代理桌面通信，不自动暂停、恢复或启动任务。**
 
-## 工作方式
+监控单独运行：Node 后台启动一个独立的原版 Codex CLI `app-server` 子进程，只发送 `initialize` 与 `account/rateLimits/read`。它不连接或接管桌面端的引擎，不发起模型请求。后台通过本机命名管道为可选 MCP 工具和独立 Windows 托盘提供状态。
 
-```text
-Codex Desktop ↔ Windows 启动器 ↔ 透明通信桥 ↔ 原版 Codex 引擎
-                                   ↕
-                         本机额度控制器／持久化队列
-                                   ↕
-                            MCP 工具与 Windows 托盘
-```
+连接失败、超时、进程退出、数据缺失或过期统一显示 **暂不可用**，清空当前额度展示。旧值不会被当成新数据；不会提供推算或虚构额度。额度低于阈值只提示，不控制 Codex。
 
-- 检查 5 小时、周额度及接口返回的其他非空额度窗口；任一窗口剩余不超过预留值即暂停。
-- 平时 30 秒检查一次，剩余不超过 15% 时每 5 秒检查；收到额度事件及到重置时间立即重新检查。
-- 使用 `ordinaryUsageAllowed` 与真实剩余额度共同判断恢复。空值不代表可用；周额度仍不足时不会因短窗口重置而开跑。
-- 暂停前落盘恢复记录，拦住新的轮次开始请求。不同聊天并发恢复，同一聊天顺序执行。
-- 已完成、人工取消、归档或等待审批的任务不擅自启动。派发结果无法确认时标记 `attention`，避免重复执行。
-- 等待恢复期间用 Windows 临时电源请求防睡眠，允许屏幕关闭；关闭守卫或队列清空即释放。
+## 旧版故障和迁移
 
-## 要求与安装
+旧版 `scripts/install.ps1` 写入用户级启动覆盖，`scripts/start-codex.ps1` 也曾设置进程级覆盖。桥接对版本、配置和通信错误的拒绝启动会影响整个桌面启动链路。用户已通过删除覆盖并重启系统验证启动恢复；本仓库未证实组织设置错误的具体内部原因。
 
-Windows 10/11、Node.js 22 或更新版本、系统 .NET Framework 4.x，以及已登录的 Codex 桌面版。无需 OpenAI API Key，无第三方 npm 运行依赖。
+新版安装与卸载都会调用 `scripts/migration.ps1`：
 
-先完成当前工作并保留聊天，然后在项目目录运行：
+- 只有当前值规范化后精确等于本插件安装根目录下的 `dist/codex-quota-bridge.exe`，或默认安装目录下该路径，才允许修改。
+- 用户级原值有可信旧备份时恢复原字符串；无备份、备份为空或仍指向旧桥接时删除该覆盖。
+- 系统级没有旧备份，不使用用户级备份替代；只清理精确匹配的旧插件覆盖，权限不足则明确报错。
+- 未设置的变量保持未设置；其他路径（即使文件也叫 codex-quota-bridge.exe）保持原样。写入前重新核对当前值。
+- 不改写登录凭据、会话、项目或其他插件配置。旧 `state.json` 队列原样保留，永不自动执行。
+
+不需要退出登录，不需要清理 Codex 数据。旧启动脚本成为无操作提示，不再打开或包裹 Codex。
+
+## 安装修复文件与重新启用
+
+要求 Windows、Node.js 22+、系统 .NET Framework 4.x。修复后从源码目录运行：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
-脚本执行源码检查、测试、原生启动器构建与当前引擎兼容检查，再安装本地插件并设置用户级 `CODEX_CLI_PATH`。备份原设置，保存运行数据到 `%LOCALAPPDATA%\CodexQuotaGuard`，仅当前 Windows 用户和 SYSTEM 可访问。
+默认只更新本插件文件、修复精确匹配的旧覆盖，不启动后台，不启用开机启动，不改动插件注册状态。安装不要求额度服务在线；没有 CLI 时也能安装，监控显示暂不可用。
 
-**完全退出并重新打开 Codex 才能接管原来已经启动的桌面进程。** 安装本身不能改接现有进程的 stdio。也可以退出后运行安装目录内的 `scripts\start-codex.ps1`。不要把“插件已安装”当作“当前会话已受保护”。
+然后按需启动独立监控：
 
-本项目使用当前 Windows 桌面版具备的 `CODEX_CLI_PATH` 入口和 App Server 协议，属于需要持续验证的本机集成。引擎版本改变后桥接拒绝启动，请重新运行安装脚本。安装不会修改 Codex 程序包、账号令牌或权限策略。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-monitor.ps1
+```
 
-## 使用
+如果需要在 Codex 中重新注册本插件 MCP 工具，显式加 `-RegisterPlugin` 运行安装脚本。只注册本插件自己的 marketplace 和插件，不把任何服务器设为 required。可在 Codex 的插件设置中按需启用；独立托盘不依赖 MCP。
 
-托盘菜单可查看额度、检查恢复、启停守卫。MCP 提供：
+可选 `-AutoStart` 仅创建指向 `codex-quota-monitor.exe --tray` 的用户 Startup 快捷方式；不会启动 Codex，不设置启动覆盖。不开启此选项则不新增自启动。
 
-| 工具 | 功能 |
-| --- | --- |
-| `guard_status` | 额度窗口、已连接引擎、待恢复队列与错误 |
-| `guard_check_now` | 立即读取真实额度并处理暂停／恢复 |
-| `guard_enable` / `guard_disable` | 启停保护；关闭时保留队列并释放防睡眠 |
-| `guard_configure` | 设置 `reservePercent`（1–50）或 `preventSleep` |
-| `guard_cancel_pending` | 用队列记录的 `id` 取消待恢复任务 |
+## 工具与退出
 
-直接使用后台命令也不需要模型：
+`guard_status` / `guard_check_now` 只读状态与额度，`guard_enable` / `guard_disable` 只切换独立轮询，`guard_configure` 只设置提醒阈值。MCP 初始化和工具发现不启动后台，也不查询账号。监控未运行时返回暂不可用。
 
 ```powershell
 node .\src\main.mjs status
 node .\src\main.mjs check
-node .\src\main.mjs configure '{"reservePercent":5,"preventSleep":true}'
-node .\src\main.mjs cancel <队列记录ID>
-```
-
-状态中至少应有一个 `ready: true` 的桥接实例及 `running` 或 `paused` 的真实账号额度状态。`bridges: []` 表示没有已接管的桌面引擎；`unknown` 表示读取尚未确认，此时不派发新任务。`attention` 项请打开原聊天核对，必要时取消记录后手动继续。
-
-## 卸载
-
-```powershell
+node .\src\main.mjs shutdown
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 ```
 
-恢复安装前的启动设置并移除本地插件，随后重启 Codex。保留恢复记录与安装文件供检查，不递归删除个人数据。
+卸载只停止监控、移除精确匹配的本插件自启动项并修复遗留覆盖，保留运行数据。需要取消本插件注册时显式使用 `-RemovePlugin`。不会按进程名称结束 Codex 或重写全局配置文件。
 
-## 验证与开发
+## 验证
 
 ```powershell
 npm run check
-npm test
 npm run build
+npm test
 node .\scripts\doctor.mjs --backend <原版codex.exe路径>
 ```
 
-测试使用独立模拟引擎、临时状态目录和真实 stdio／本机管道，覆盖阈值、周额度、多个项目与子任务、排队、进度保存、人工取消、账号切换及不确定派发。`doctor` 仅握手和读取额度，不创建任务、不兑换额度。GitHub Actions 在 Windows 上执行检查、测试和原生构建。
-
-## 限制与数据
-
-- 只接管经桥接启动的本机 Codex 桌面引擎。独立 CLI、其他设备及云端任务不受其停止控制，但可能消耗同一账号额度。
-- 额度存在统计延迟，单次请求可能消耗超过预留的 5%。无法承诺绝不耗尽；在途请求和已经提交的外部操作不能撤回。
-- 读取失败会关闭派发入口并尝试中断已知任务；后台异常时桥接重连，失败则拒绝新的执行请求。强制终止 Windows、磁盘损坏或网络故障期间不能保证即时恢复。
-- 自动恢复是新轮次，保留原聊天与配置，不是恢复进程内存；恢复提示要求先核对已完成操作。
-- 取消托盘图标不等于停用守卫。选择“关闭守卫”才停止接管并释放电源请求。
-- 仅在本机保存账号标识、请求内容及恢复状态，不读取／复制登录令牌。通过当前用户私有管道和随机令牌控制后台，不暴露 HTTP 监听端口，不上传遥测。
-- 不自动兑换重置券、购买额度、切换账号或模型，也不替原任务批准权限。
-
-源码公开不等于插件已提交 OpenAI 公共目录；本仓库提供本机安装方式。
+测试覆盖安装、更新、卸载、自启动目标、旧覆盖迁移、其他环境变量与 Codex 数据样本不变、只读请求白名单、连接失败/超时/崩溃、数据过期和 MCP 离线降级。桌面替身进程的隔离测试不等于真实桌面 GUI 启动/登录测试。实际执行结果和未验证项见 `docs/repair-validation.md`。
