@@ -47,6 +47,9 @@ internal static class MonitorUI {
             stop.Reset();icon=new NotifyIcon{Icon=SystemIcons.Information,Text="Codex 额度监控",Visible=true};
             var menu=new ContextMenuStrip();state.Enabled=false;menu.Items.Add(state);
             Add(menu,"查看额度",async()=>await ShowStatus());Add(menu,"立即查询",async()=>{await Control("check");await Refresh();});
+            Add(menu,"查看自动控制",async()=>await ShowAutomation());
+            Add(menu,"安全模式（保留监控）",async()=>{await Control("guard.safeMode");await Refresh();});
+            Add(menu,"启用已连接引擎的守卫",async()=>{await Control("enable");await Refresh();});
             Add(menu,"退出监控",async()=>{try{await Control("shutdown");}finally{ExitThread();}});
             icon.ContextMenuStrip=menu;icon.DoubleClick+=async delegate{await ShowStatus();};
             timer=new System.Windows.Forms.Timer{Interval=3000};timer.Tick+=async delegate{if(stop.WaitOne(0)){ExitThread();return;}await Refresh();};timer.Start();
@@ -59,6 +62,19 @@ internal static class MonitorUI {
                 var data=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(await Control("status"));text=(string)data["label"];
                 foreach(Dictionary<string,object> row in (IEnumerable)data["windows"]) text+="\r\n"+row["limitId"]+" / "+row["name"]+"：剩余 "+row["remainingPercent"]+"%";
             }catch{}MessageBox.Show(text,"额度监控");
+        }
+        async Task ShowAutomation(){
+            string text="暂不可用";
+            try{
+                var data=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(await Control("guard.status"));
+                if(data.ContainsKey("bridges")){
+                    int count=0;foreach(object item in (IEnumerable)data["bridges"])count++;
+                    text="已连接引擎："+count+"\r\n待恢复任务："+data["pendingCount"];
+                    text+="\r\n自动控制："+((bool)data["enabled"]?"已启用":"安全模式");
+                    if(count==0)text+="\r\n当前只有独立监控；自动停跑需要使用专用会话启动脚本。";
+                    foreach(Dictionary<string,object> row in (IEnumerable)data["jobs"])text+="\r\n"+row["threadId"]+" / "+row["state"];
+                }
+            }catch{}MessageBox.Show(text,"额度守卫");
         }
         protected override void ExitThreadCore(){timer.Stop();timer.Dispose();stop.Dispose();icon.Visible=false;icon.Dispose();base.ExitThreadCore();}
     }

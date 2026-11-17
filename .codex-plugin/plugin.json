@@ -1,7 +1,7 @@
 {
   "name": "codex-quota-guard",
-  "version": "0.2.0",
-  "description": "独立只读额度监控；不接管 Codex 启动或任务",
+  "version": "0.3.0",
+  "description": "独立额度监控与可选会话级自动停跑/恢复；不写入全局启动覆盖",
   "author": {
     "name": "YJW2000"
   },
@@ -9,7 +9,7 @@
   "mcpServers": "./mcp.json",
   "interface": {
     "displayName": "Codex 额度守卫",
-    "shortDescription": "独立额度监控，启动互不影响",
+    "shortDescription": "额度监控与可恢复的任务守卫",
     "developerName": "YJW2000",
     "category": "Developer Tools",
     "capabilities": [],

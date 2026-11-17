@@ -48,7 +48,7 @@ test('monitor daemon exit affects only monitor, not an independent desktop stub'
 test('MCP initialization and discovery need no daemon, backend or credentials',async t=>{
  const {home}=setup(t);const child=spawn(process.execPath,[path.join(ROOT,'src/main.mjs'),'mcp'],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,CODEX_QUOTA_GUARD_HOME:home}});
  const peer=new Peer(child.stdout,child.stdin);t.after(()=>{child.stdin.end();child.kill();});
- const r=await peer.call('initialize',{protocolVersion:'2025-06-18'});assert.equal(r.serverInfo.version,'0.2.0');assert.equal((await peer.call('tools/list')).tools.length,5);
+ const r=await peer.call('initialize',{protocolVersion:'2025-06-18'});assert.equal(r.serverInfo.version,'0.3.0');assert.equal((await peer.call('tools/list')).tools.length,8);
  const result=await peer.call('tools/call',{name:'guard_status',arguments:{}});assert.equal(result.structuredContent.label,'暂不可用');assert.equal(fs.existsSync(path.join(home,'monitor-token')),false);
 });
 test('daemon crash is reported as unavailable by its client',{timeout:5000},async t=>{

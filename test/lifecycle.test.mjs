@@ -29,7 +29,7 @@ test('install, update, optional monitor autostart and uninstall preserve desktop
  if(Test-Path -LiteralPath ${quote(path.join(startup,'Codex Quota Monitor.lnk'))}){throw 'Own autostart was not removed'};
  'LIFECYCLE_OK'`;
  const out=ps(script);assert.match(out,/LIFECYCLE_OK/);for(const f of sentinels)assert.equal(fs.readFileSync(path.join(codex,f),'utf8'),'sentinel-'+f);
- const settings=JSON.parse(fs.readFileSync(path.join(app,'installation.json'),'utf8'));assert.equal(settings.mode,'independent-monitor');assert.equal(fs.existsSync(path.join(app,'dist/codex-quota-bridge.exe')),false);
+ const settings=JSON.parse(fs.readFileSync(path.join(app,'installation.json'),'utf8'));assert.equal(settings.mode,'independent-monitor');assert.equal(fs.existsSync(path.join(app,'dist/codex-quota-bridge.exe')),true);
  const validate=spawnSync(path.join(app,'dist/codex-quota-monitor.exe'),['--validate'],{windowsHide:true});assert.equal(validate.status,0);
  const reject=spawnSync(path.join(app,'dist/codex-quota-monitor.exe'),['app-server'],{windowsHide:true});assert.equal(reject.status,2);
 });
@@ -41,11 +41,12 @@ test('foreign per-process startup override is preserved; owned process override 
  }finally{$env:CODEX_CLI_PATH=$original};'MIGRATION_OK'`;
  assert.match(ps(script),/MIGRATION_OK/);
 });
-test('all persistent launch override writes are confined to guarded migration; no task interception or Codex launcher remains',()=>{
+test('persistent launch override writes are confined to guarded legacy migration',()=>{
  for(const dir of ['src','scripts','native'])for(const f of fs.readdirSync(path.join(ROOT,dir),{recursive:true})){
   if(!/\.(mjs|ps1|cs)$/.test(f))continue;const full=path.join(ROOT,dir,f),s=fs.readFileSync(full,'utf8');
   if(f!=='migration.ps1')assert.doesNotMatch(s,/SetEnvironmentVariable\(['"]CODEX_CLI_PATH|\$env:CODEX_CLI_PATH\s*=|setx\s+CODEX_CLI_PATH|Set-ItemProperty.*CODEX_CLI_PATH/i,full);
-  assert.doesNotMatch(s,/turn\/start|turn\/interrupt|thread\/resume|RunInherited|CreateProcess\(/,full);
+  if(!['automation.mjs','bridge.mjs','Bridge.cs'].includes(f))assert.doesNotMatch(s,/turn\/start|turn\/interrupt|thread\/resume|RunInherited|CreateProcess\(/,full);
+  if(/EnvironmentVariables\[['"]CODEX_CLI_PATH/.test(s))assert.ok(['start-guarded-codex.ps1','rollback.ps1'].includes(f),full);
  }
 });
 

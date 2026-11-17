@@ -1,8 +1,8 @@
-export const DEFAULT_CONFIG = Object.freeze({ enabled: true, reservePercent: 5, pollMs: 30000, timeoutMs: 12000, staleMs: 65000 });
+export const DEFAULT_CONFIG = Object.freeze({ enabled: true, preventSleep: true, reservePercent: 5, pollMs: 30000, timeoutMs: 12000, staleMs: 65000 });
 export function validateConfig(patch) {
   for (const [key,value] of Object.entries(patch)) {
     if (!(key in DEFAULT_CONFIG)) throw new Error(`Unknown setting: ${key}`);
-    if (key === 'enabled' ? typeof value !== 'boolean' : !Number.isFinite(value)) throw new Error(`Invalid setting: ${key}`);
+    if (['enabled','preventSleep'].includes(key) ? typeof value !== 'boolean' : !Number.isFinite(value)) throw new Error(`Invalid setting: ${key}`);
   }
   const c={...DEFAULT_CONFIG,...patch};
   if(c.reservePercent<1 || c.reservePercent>50 || c.pollMs<1000 || c.timeoutMs<100 || c.timeoutMs>30000 || c.staleMs<c.pollMs) throw new Error('Invalid monitor settings');

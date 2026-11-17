@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-quota-guard",
-  "version": "0.2.0",
-  "description": "独立只读额度监控；不接管 Codex 启动或任务",
+  "version": "0.3.0",
+  "description": "独立额度监控与可选会话级自动停跑/恢复；不写入全局启动覆盖",
   "author": {
     "name": "YJW2000"
   },
@@ -17,8 +17,8 @@
     "com.openai": {
       "interface": {
         "displayName": "Codex 额度守卫",
-        "shortDescription": "独立额度监控，启动互不影响",
-        "longDescription": "独立进程只读查询额度；故障显示暂不可用，不阻断桌面启动、登录或任务。",
+        "shortDescription": "额度监控与可恢复的任务守卫",
+        "longDescription": "独立监控常驻；可选预检会话桥接提供暂停和续跑，异常自动降级，普通桌面启动不变。",
         "developerName": "YJW2000",
         "category": "Developer Tools",
         "capabilities": [],

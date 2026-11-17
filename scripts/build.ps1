@@ -5,3 +5,6 @@ if(-not(Test-Path -LiteralPath $compiler)){throw '.NET Framework C# compiler is 
 $output=Join-Path $ProjectRoot 'dist';New-Item -ItemType Directory -Path $output -Force|Out-Null
 & $compiler /nologo /target:winexe /optimize+ /utf8output /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll "/out:$(Join-Path $output 'codex-quota-monitor.exe')" (Join-Path $ProjectRoot 'native\Monitor.cs')
 if($LASTEXITCODE -ne 0){throw 'Monitor UI build failed.'}
+
+& $compiler /nologo /target:exe /optimize+ /utf8output /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll "/out:$(Join-Path $output 'codex-quota-bridge.exe')" (Join-Path $ProjectRoot 'native\Bridge.cs')
+if($LASTEXITCODE -ne 0){throw 'Session bridge build failed.'}

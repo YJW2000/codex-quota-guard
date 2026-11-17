@@ -1,9 +1,9 @@
 {
   "name": "codex-quota-guard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Independent read-only Codex quota monitor; never overrides desktop startup",
+  "description": "Independent Codex quota monitor with opt-in session pause and resume",
   "engines": {
     "node": ">=22"
   },
