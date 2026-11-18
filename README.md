@@ -1,4 +1,6 @@
-# Codex 额度守卫 0.4
+# Codex 额度守卫 0.4.1
+
+[简体中文](README.md) · [繁體中文](docs/README.zh-Hant.md) · [English](docs/README.en.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md)
 
 保留真实额度监控、低额度自动暂停、排队、恢复后续跑和等待时防睡眠。取消用户级/系统级 `CODEX_CLI_PATH` 启动覆盖；监控故障不会成为普通 Codex 启动或登录的依赖。
 
@@ -80,11 +82,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\rollback.ps1
 
 MCP 工具：`guard_status`、`guard_check_now`、`guard_enable`、`guard_disable`、`guard_configure`、`guard_automation_status`、`guard_safe_mode`、`guard_cancel_pending`。启用工具只作用于现有连接，不能把普通桌面变成守卫会话。MCP 初始化与工具发现离线可用，不启动查询后台。
 
+运行诊断命令时，请将 `C:\path\to\codex.exe` 替换为本机原版 Codex CLI 的路径。
+
 ```powershell
 npm run check
 npm run build
 npm test
-node .\scripts\doctor.mjs --backend <原版codex.exe路径>
+node .\scripts\doctor.mjs --backend "C:\path\to\codex.exe"
+```
+
+需要卸载时，单独运行以下命令。
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 ```
 
