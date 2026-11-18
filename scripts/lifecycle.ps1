@@ -3,7 +3,7 @@ function Assert-OwnInstallRoot([string]$InstallRoot) {
     if ($resolved -eq [IO.Path]::GetPathRoot($resolved)) { throw 'Invalid install root.' }
     $cursor = $resolved
     while ($cursor) {
-        if ((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Install root must not traverse reparse points.' }
+        if ((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Install root must not traverse reparse points.' }
         $cursor = Split-Path -Parent $cursor
     }
     if (Test-Path -LiteralPath $resolved) {

@@ -7,6 +7,11 @@ import {ROOT} from '../src/client.mjs';
 import {testHome,cleanHome} from './helpers.mjs';
 const ps=(script)=>execFileSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-Command',script],{encoding:'utf8',windowsHide:true,cwd:ROOT});
 const quote=s=>"'"+s.replaceAll("'","''")+"'";
+test('default Windows installation may traverse hidden AppData directories',t=>{
+ const home=testHome();t.after(()=>cleanHome(home));const parent=path.join(home,'hidden-parent');
+ const script=`$ErrorActionPreference='Stop';. ./scripts/lifecycle.ps1;New-Item -ItemType Directory -Path ${quote(parent)}|Out-Null;$item=Get-Item -LiteralPath ${quote(parent)} -Force;$item.Attributes=$item.Attributes -bor [IO.FileAttributes]::Hidden;Assert-OwnInstallRoot ${quote(path.join(parent,'app'))};'HIDDEN_PARENT_OK'`;
+ assert.match(ps(script),/HIDDEN_PARENT_OK/);
+});
 test('legacy repair decisions: exact ownership, missing override, backup, foreign path',()=>{
  const out=ps(`. ./scripts/migration.ps1; $owned=@('C:\\guard\\app\\dist\\codex-quota-bridge.exe'); @(
  (Get-LegacyRepairPlan 'C:\\guard\\app\\dist\\codex-quota-bridge.exe' $owned $null $true),
