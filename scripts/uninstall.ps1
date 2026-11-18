@@ -11,7 +11,7 @@ if(Test-Path -LiteralPath $settingsPath) {
         $env:CODEX_QUOTA_GUARD_HOME=$StateDir
         & $settings.nodePath (Join-Path $InstallRoot 'src\main.mjs') shutdown | Out-Null
         Set-MonitorStartup (Join-Path $InstallRoot 'dist\codex-quota-monitor.exe') $StartupDir $false
-        & (Join-Path $InstallRoot 'dist\codex-quota-monitor.exe') --close-tray
+        Start-Process -FilePath (Join-Path $InstallRoot 'dist\codex-quota-monitor.exe') -ArgumentList '--close-tray' -WindowStyle Hidden -Wait
     }
     if($RemovePlugin -and $settings.backendPath) { & $settings.backendPath plugin remove 'codex-quota-guard@quota-guard-local'; if($LASTEXITCODE -ne 0){throw 'Own plugin removal failed.'} }
 }

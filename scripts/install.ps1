@@ -3,6 +3,7 @@ param(
     [string]$StateDir = (Join-Path $env:LOCALAPPDATA 'CodexQuotaGuard'),
     [string]$BackendPath,
     [switch]$SkipTests,
+    [switch]$UsePrebuilt,
     [switch]$RegisterPlugin,
     [switch]$AutoStart,
     [string]$StartupDir = [Environment]::GetFolderPath('Startup')
@@ -11,6 +12,13 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'migration.ps1')
 . (Join-Path $PSScriptRoot 'lifecycle.ps1')
 $projectRoot = Split-Path -Parent $PSScriptRoot
+if ($UsePrebuilt) {
+    foreach ($binary in @('codex-quota-monitor.exe', 'codex-quota-bridge.exe')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $projectRoot "dist\$binary") -PathType Leaf)) {
+            throw "Missing prebuilt release binary: $binary. Extract the complete Windows release ZIP."
+        }
+    }
+}
 $InstallRoot = [IO.Path]::GetFullPath($InstallRoot); $StateDir = [IO.Path]::GetFullPath($StateDir)
 Assert-OwnInstallRoot $InstallRoot
 # Run repair even offline. Only exact legacy paths may change.
@@ -25,7 +33,9 @@ if (-not $SkipTests) {
     & $nodePath (Join-Path $projectRoot 'scripts\check.mjs'); if ($LASTEXITCODE -ne 0) { throw 'Source verification failed.' }
     & $nodePath (Join-Path $projectRoot 'scripts\test.mjs'); if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 }
-& (Join-Path $projectRoot 'scripts\build.ps1') -ProjectRoot $projectRoot
+if (-not $UsePrebuilt) {
+    & (Join-Path $projectRoot 'scripts\build.ps1') -ProjectRoot $projectRoot
+}
 # Never overwrite a running session bridge, and never stop a desktop by process name.
 $bridgeFile=Join-Path $InstallRoot 'dist/codex-quota-bridge.exe'
 $inUse=@(Get-CimInstance Win32_Process|Where-Object{$_.ExecutablePath -and [string]::Equals($_.ExecutablePath,$bridgeFile,[StringComparison]::OrdinalIgnoreCase)})
@@ -37,7 +47,9 @@ if(Test-Path -LiteralPath $oldSettingsFile){
   $env:CODEX_QUOTA_GUARD_HOME=$StateDir
   & $old.nodePath (Join-Path $InstallRoot 'src/main.mjs') shutdown|Out-Null
   $trayFile=Join-Path $InstallRoot 'dist/codex-quota-monitor.exe'
-  if(Test-Path -LiteralPath $trayFile){& $trayFile --close-tray}
+  if(Test-Path -LiteralPath $trayFile){
+   Start-Process -FilePath $trayFile -ArgumentList '--close-tray' -WindowStyle Hidden -Wait
+  }
   for($attempt=0;$attempt -lt 50;$attempt++){
    $tray=@(Get-CimInstance Win32_Process|Where-Object{$_.ExecutablePath -and [string]::Equals($_.ExecutablePath,$trayFile,[StringComparison]::OrdinalIgnoreCase)})
    if(-not $tray.Count){break};Start-Sleep -Milliseconds 100

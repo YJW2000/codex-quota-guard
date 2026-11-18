@@ -28,7 +28,7 @@ test('install, update, optional monitor autostart and uninstall preserve desktop
  const script=`$ErrorActionPreference='Stop';$before=@{};foreach($scope in @('User','Machine','Process')){$before[$scope]=[Environment]::GetEnvironmentVariable('CODEX_CLI_PATH',$scope)};
  $env:CODEX_HOME=${quote(codex)};
  & ./scripts/install.ps1 -InstallRoot ${quote(app)} -StateDir ${quote(runtime)} -StartupDir ${quote(startup)} -SkipTests -AutoStart;
- & ./scripts/install.ps1 -InstallRoot ${quote(app)} -StateDir ${quote(runtime)} -StartupDir ${quote(startup)} -SkipTests;
+ & ./scripts/install.ps1 -InstallRoot ${quote(app)} -StateDir ${quote(runtime)} -StartupDir ${quote(startup)} -SkipTests -UsePrebuilt;
  & ./scripts/uninstall.ps1 -InstallRoot ${quote(app)} -StateDir ${quote(runtime)} -StartupDir ${quote(startup)};
  foreach($scope in @('User','Machine','Process')){if([Environment]::GetEnvironmentVariable('CODEX_CLI_PATH',$scope) -cne $before[$scope]){throw "Override changed: $scope"}};
  if(Test-Path -LiteralPath ${quote(path.join(startup,'Codex Quota Monitor.lnk'))}){throw 'Own autostart was not removed'};

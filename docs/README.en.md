@@ -2,6 +2,8 @@
 
 [简体中文](../README.md) · [繁體中文](README.zh-Hant.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
 
+[Download the Windows installer (v0.4.1)](https://github.com/YJW2000/codex-quota-guard/releases/download/v0.4.1/codex-quota-guard-v0.4.1-windows.zip)
+
 Codex Quota Guard monitors the quota reported by Codex. In a guarded session it can pause chats when the five-hour allowance runs low, queue new requests, and resume work after the allowance recovers. It can also keep Windows awake while work is queued. The monitor runs independently of desktop startup and sign-in. It requires no user- or machine-level `CODEX_CLI_PATH` override.
 
 ## Startup issue in version 0.1
@@ -24,6 +26,8 @@ A local comparison reproduced the failure. The original CLI exited successfully 
 - Automation covers engines connected through the guarded launcher. Other Codex instances, terminals, and devices run independently. Resumption can be delayed while Windows is asleep, the network is offline, or the application is closed.
 
 ## Install and enable
+
+**Install from the Windows download.** You need Node.js 22 or later and .NET Framework 4.x. Extract the ZIP and double-click `install.cmd` to install and start standalone monitoring. Use the guarded launcher below to enable automatic pause and resume.
 
 Requirements are Windows, Node.js 22 or later, and .NET Framework 4.x. Run these commands from the **repaired source checkout**. Old cached installers contain the earlier startup behavior.
 

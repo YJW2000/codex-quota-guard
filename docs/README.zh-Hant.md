@@ -2,6 +2,8 @@
 
 [简体中文](../README.md) · [繁體中文](README.zh-Hant.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
 
+[下載 Windows 安裝套件（v0.4.1）](https://github.com/YJW2000/codex-quota-guard/releases/download/v0.4.1/codex-quota-guard-v0.4.1-windows.zip)
+
 額度守衛會讀取帳號的實際額度，在 5 小時額度不足時自動暫停對話、將新請求排入佇列，並在額度恢復後回到原對話繼續執行。等待期間可讓電腦保持喚醒。修復版已取消透過使用者或系統層級的 `CODEX_CLI_PATH` 指定啟動程式的做法。即使監控故障，仍可照常啟動及登入 Codex。
 
 ## 舊版啟動故障的原因
@@ -24,6 +26,8 @@
 - 守衛只控制從專用入口啟動且已連線的引擎。從一般入口啟動的 Codex、其他終端機及其他裝置不在控制範圍內。電腦睡眠、網路中斷或程式關閉期間，無法保證立即恢復工作。
 
 ## 安裝與重新啟用
+
+**使用 Windows 安裝套件。** 需要 Node.js 22 以上版本及 .NET Framework 4.x。解壓縮 ZIP 後，按兩下 `install.cmd` 安裝並啟動獨立監控。若要自動暫停及續跑，請使用下方的專用啟動入口。
 
 需要 Windows、Node.js 22 以上版本，以及系統的 .NET Framework 4.x。請在**修復版的原始碼目錄**執行以下命令，避免使用舊快取中的指令碼。
 

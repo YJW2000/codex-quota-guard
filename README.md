@@ -2,6 +2,8 @@
 
 [简体中文](README.md) · [繁體中文](docs/README.zh-Hant.md) · [English](docs/README.en.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md)
 
+[下载 Windows 安装包（v0.4.1）](https://github.com/YJW2000/codex-quota-guard/releases/download/v0.4.1/codex-quota-guard-v0.4.1-windows.zip)
+
 保留真实额度监控、低额度自动暂停、排队、恢复后续跑和等待时防睡眠。取消用户级/系统级 `CODEX_CLI_PATH` 启动覆盖；监控故障不会成为普通 Codex 启动或登录的依赖。
 
 ## 已定位的旧版故障
@@ -24,6 +26,8 @@
 - 作用范围是经专用入口启动且已连接的引擎；其他普通启动的 Codex、其他终端或设备不受控制。无法保证休眠、断网或程序关闭期间“立刻”恢复。
 
 ## 安装与重新启用
+
+**使用 Windows 安装包。** 需要 Node.js 22 或更新版本和 .NET Framework 4.x。解压 ZIP 后，双击 `install.cmd` 安装并启动独立监控。自动暂停和续跑请使用下方的专用启动入口。
 
 要求 Windows、Node.js 22+、系统 .NET Framework 4.x。从**修复后的源码目录**运行，不要使用旧缓存里的脚本：
 
