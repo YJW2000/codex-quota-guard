@@ -60,7 +60,17 @@ internal static class MonitorUI {
             string text="暂不可用";
             try{
                 var data=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(await Control("status"));text=(string)data["label"];
-                foreach(Dictionary<string,object> row in (IEnumerable)data["windows"]) text+="\r\n"+row["limitId"]+" / "+row["name"]+"：剩余 "+row["remainingPercent"]+"%";
+                foreach(Dictionary<string,object> row in (IEnumerable)data["windows"]){
+                    string duration=Convert.ToString(row["windowDurationMins"]);
+                    string window=duration=="300"?"5 小时":duration=="10080"?"每周":Convert.ToString(row["name"]);
+                    text+="\r\n"+row["limitId"]+" / "+window+"：剩余 "+row["remainingPercent"]+"%";
+                }
+                if(data.ContainsKey("notifications")){
+                    var mail=(Dictionary<string,object>)data["notifications"];
+                    text+="\r\nGmail 提醒："+((bool)mail["configured"]?"已配置":"待连接");
+                    text+="，待发 "+mail["pending"]+"，已发 "+mail["sent"]+"，待核对 "+mail["attention"];
+                    if(mail["lastError"]!=null)text+="\r\n"+mail["lastError"];
+                }
             }catch{}MessageBox.Show(text,"额度监控");
         }
         async Task ShowAutomation(){

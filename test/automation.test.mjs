@@ -10,7 +10,7 @@ test('pause all projects and children, resume all once on actual recovery', asyn
   const { controller: c, store, adapter: a } = fixture(t);
   a.thread('project-a').thread('project-b').thread('child', { child: true }); a.snapshot = usage(95);
   await c.tick(); assert.equal(store.data.jobs.length, 3); assert.equal(a.calls.filter(x => x.method === 'turn/interrupt').length, 3);
-  a.snapshot = usage(0, 97); await c.tick(); assert.equal(a.calls.filter(x => x.method === 'turn/start').length, 0);
+  a.snapshot = usage(0, 97); await c.tick(); assert.equal(a.calls.filter(x => x.method === 'turn/start').length, 3);
   a.snapshot = usage(0, 0); await c.tick(); await c.tick();
   assert.equal(a.calls.filter(x => x.method === 'turn/start').length, 3); assert.equal(c.status().pendingCount, 0);
 });
@@ -20,6 +20,32 @@ test('interruption record is durable before interrupt RPC', async t => {
     if (method === 'turn/interrupt') assert.equal(JSON.parse(fs.readFileSync(store.file, 'utf8')).jobs[0].state, 'interrupting');
     return call(method, params);
   }; await c.tick();
+});
+test('weekly low or exhausted, account restrictions and unknown durations never interrupt a turn',async t=>{
+ const {controller,adapter,store}=fixture(t);adapter.thread('live');
+ const weeklyOnly={...usage(),rateLimits:{primary:{usedPercent:99,windowDurationMins:10080}}};
+ for(const snapshot of [weeklyOnly,usage(0,100),{...weeklyOnly,ordinaryUsageAllowed:false},
+  {...usage(),rateLimits:{spendControlReached:true,primary:{usedPercent:100}}}]){
+  adapter.snapshot=snapshot;await controller.tick();assert.notEqual(controller.policy(adapter.accountId).state,'paused');
+ }
+ assert.equal(store.data.jobs.length,0);assert.equal(adapter.calls.filter(x=>x.method==='turn/interrupt').length,0);
+});
+test('pause alert records a confirmed interruption and persists its 5-hour window',async t=>{
+ const {controller,adapter,store}=fixture(t);adapter.thread('live');adapter.failInterrupt=true;adapter.snapshot=usage(99);
+ await controller.tick();assert.equal(store.data.jobs[0].pauseAlert,undefined);
+ adapter.failInterrupt=false;await controller.tick();const alert=store.data.jobs[0].pauseAlert;
+ assert.equal(alert.remainingPercent,1);assert.equal(alert.resetsAt,2000);assert.equal(alert.limitId,'codex');
+ assert.ok(alert.at>=store.data.jobs[0].createdAt);
+ assert.deepEqual(JSON.parse(fs.readFileSync(store.file,'utf8')).jobs[0].pauseAlert,alert);
+ await controller.tick();assert.deepEqual(store.data.jobs[0].pauseAlert,alert);
+});
+test('pending work waits for verified 5-hour recovery with usage allowed',async t=>{
+ const {controller,adapter,store}=fixture(t);adapter.thread('live');adapter.snapshot=usage(95);await controller.tick();
+ adapter.snapshot={...usage(),rateLimits:{primary:{windowDurationMins:10080,usedPercent:2}}};
+ await controller.tick();assert.equal(store.data.jobs[0].state,'pending');
+ adapter.snapshot={...usage(10,100),ordinaryUsageAllowed:false};await controller.tick();assert.equal(store.data.jobs[0].state,'pending');
+ adapter.snapshot=usage(10,99);await controller.tick();assert.equal(store.data.jobs[0].state,'done');
+ assert.equal(adapter.calls.filter(x=>x.method==='turn/start').length,1);
 });
 test('new requests deduplicate and same chat drains sequentially', async t => {
   const { controller: c, adapter: a, store } = fixture(t); a.thread('a', { active: false }); a.snapshot = usage(99); await c.tick();

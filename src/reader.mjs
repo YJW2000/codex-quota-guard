@@ -17,7 +17,7 @@ export class QuotaReader extends EventEmitter {
     child.once('exit',()=>peer.fail(new Error('额度查询进程已退出')));
     peer.on('disconnect',()=>{ if(this.child===child) { this.close(); this.emit('unavailable'); } });
     peer.on('message',request=>{ if(request.id!==undefined && request.method) peer.reject(request,new Error('Read-only monitor')); });
-    this.initializing=peer.call('initialize',{clientInfo:{name:'codex_quota_monitor',version:'0.3.0'}},this.timeoutMs)
+    this.initializing=peer.call('initialize',{clientInfo:{name:'codex_quota_monitor',version:'0.4.0'}},this.timeoutMs)
       .then(()=>peer.send({method:'initialized'})).catch(e=>{this.close();throw e;});
     return this.initializing;
   }

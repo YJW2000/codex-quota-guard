@@ -11,7 +11,7 @@ for await(const line of readline.createInterface({input:process.stdin})){
   }else if(m.method==='test/state')result={calls,requests,threads:[...threads.values()]};
   else if(m.method==='account/rateLimits/read'){
    if(fail)throw Error('offline');
-   result={accountId:'account-a',ordinaryUsageAllowed:true,rateLimits:{primary:{usedPercent:used}}};
+   result={accountId:'account-a',ordinaryUsageAllowed:true,rateLimits:{primary:{usedPercent:used,windowDurationMins:300}}};
   }else if(m.method==='thread/loaded/list')result={data:[...threads.keys()]};
   else if(m.method==='thread/read')result={thread:threads.get(p.threadId)||{id:p.threadId,status:{type:'idle'}}};
   else if(m.method==='thread/turns/list')result={data:threads.has(p.threadId)?[threads.get(p.threadId).turn]:[]};

@@ -67,3 +67,17 @@ test('offline rollback disables automation without deleting its queue or legacy 
  const data=JSON.parse(fs.readFileSync(file,'utf8'));assert.equal(data.enabled,false);assert.deepEqual(data.jobs,jobs);assert.equal(fs.readFileSync(path.join(home,'state.json'),'utf8'),'legacy-kept');
  fs.writeFileSync(file,'{broken');assert.throws(()=>execFileSync(process.execPath,[path.join(ROOT,'scripts/safe-mode.mjs'),home],{stdio:'pipe',windowsHide:true}));assert.equal(fs.readFileSync(file,'utf8'),'{broken');
 });
+test('a passing CLI preflight cannot mark a desktop with a dropped environment as guarded', t=>{
+ const {home,backend,root}=fixture(t);
+ fs.writeFileSync(backend+'.drop-env','');
+ const recordPath=path.join(home,'desktop-launch.json');
+ try{
+  assert.throws(()=>ps(`$ErrorActionPreference='Stop';& ./scripts/start-guarded-codex.ps1 -StateDir ${quote(home)} -AppPath ${quote(backend)} -HandshakeTimeoutSeconds 1`));
+  const record=JSON.parse(fs.readFileSync(recordPath,'utf8').replace(/^\uFEFF/,''));
+  assert.equal(record.guarded,false);
+  assert.match(record.sessionId,/^[\da-f-]{36}$/);
+ }finally{
+  ps(`$env:CODEX_QUOTA_GUARD_HOME=${quote(home)};& ${quote(process.execPath)} ${quote(path.join(root,'src/main.mjs'))} shutdown|Out-Null;
+   if(Test-Path -LiteralPath ${quote(recordPath)}){$r=Get-Content -LiteralPath ${quote(recordPath)} -Raw|ConvertFrom-Json;$p=Get-Process -Id $r.processId -ErrorAction SilentlyContinue;if($p -and $p.Path -eq ${quote(backend)}){Stop-Process -Id $p.Id}}`);
+ }
+});

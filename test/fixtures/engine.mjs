@@ -10,6 +10,6 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(m.method==='initialize')console.log(JSON.stringify({id:m.id,result:{userAgent:'fixture'}}));
  else if(m.method==='account/rateLimits/read'){
   if(mode==='fail')console.log(JSON.stringify({id:m.id,error:{code:-1,message:'offline'}}));
-  else console.log(JSON.stringify({id:m.id,result:mode==='missing'?{}:{accountId:'fixture',ordinaryUsageAllowed:true,rateLimits:{primary:{usedPercent:12},secondary:null}}}));
+  else console.log(JSON.stringify({id:m.id,result:mode==='missing'?{}:{accountId:'fixture',ordinaryUsageAllowed:true,rateLimits:{primary:{usedPercent:12,windowDurationMins:300},secondary:null}}}));
  } else {console.error('UNSAFE METHOD');process.exit(7);}
 });

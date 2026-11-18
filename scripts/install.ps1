@@ -64,7 +64,7 @@ foreach ($relative in @('src\controller.mjs','native\Launcher.cs')) {
     if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force }
 }
 $utf8 = New-Object Text.UTF8Encoding($false)
-$settings = @{ root=$InstallRoot; stateDir=$StateDir; backendPath=$BackendPath; nodePath=$nodePath; nativePath=(Join-Path $InstallRoot 'dist\codex-quota-monitor.exe'); mode='independent-monitor'; version='0.3.0'; bridgePath=(Join-Path $InstallRoot 'dist\codex-quota-bridge.exe') }
+$settings = @{ root=$InstallRoot; stateDir=$StateDir; backendPath=$BackendPath; nodePath=$nodePath; nativePath=(Join-Path $InstallRoot 'dist\codex-quota-monitor.exe'); mode='independent-monitor'; version='0.4.0'; bridgePath=(Join-Path $InstallRoot 'dist\codex-quota-bridge.exe') }
 [IO.File]::WriteAllText((Join-Path $InstallRoot 'installation.json'),($settings|ConvertTo-Json),$utf8)
 $mcpPath = Join-Path $InstallRoot 'mcp.json'; $mcp = Get-Content -LiteralPath $mcpPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $mcp.mcpServers.'quota-guard' | Add-Member NoteProperty env @{ CODEX_QUOTA_GUARD_HOME=$StateDir } -Force

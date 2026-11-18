@@ -13,7 +13,17 @@ export function atomicWrite(file,value) {
   const temp=`${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
   const fd=fs.openSync(temp,'wx',0o600);
   try { fs.writeFileSync(fd,JSON.stringify(value,null,2)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  try { fs.renameSync(temp,file); } finally { fs.rmSync(temp,{force:true}); }
+  try {
+    // Windows readers can briefly hold the destination without delete sharing.
+    // Keep the old ledger intact until one atomic replacement succeeds.
+    for (let attempt=0;;attempt++) {
+      try { fs.renameSync(temp,file); break; }
+      catch (error) {
+        if (attempt >= 3 || process.platform !== 'win32' || !['EPERM','EBUSY','EACCES'].includes(error.code)) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 * (attempt+1));
+      }
+    }
+  } finally { fs.rmSync(temp,{force:true}); }
 }
 export function loadToken(home) {
   fs.mkdirSync(home,{recursive:true,mode:0o700}); const file=path.join(home,'monitor-token');

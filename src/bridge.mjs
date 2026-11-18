@@ -10,7 +10,11 @@ export const MODEL_ACTIONS=new Set(['turn/start','turn/steer','turn/addUserMessa
 export async function runBridge(args,{backendPath=process.env.CODEX_QUOTA_REAL_CLI||installation().backendPath,backendArgs=[],input=process.stdin,output=process.stdout,home=stateDirectory(),gateMs=300}={}){
  if(!backendPath)throw new Error('Original CLI is unavailable');
  const engineKey=process.env.CODEX_QUOTA_GUARD_ENGINE_ID||createHash('sha256').update(process.env.CODEX_HOME||'default').digest('hex').slice(0,16);
- const child=spawn(backendPath,[...backendArgs,...args],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,CODEX_APP_RUNTIME_CLI_PATH:backendPath}});
+ const sessionId=process.env.CODEX_QUOTA_LAUNCH_ID;
+ const preflight=process.env.CODEX_QUOTA_PREFLIGHT==='1';
+ const childEnv={...process.env,CODEX_APP_RUNTIME_CLI_PATH:backendPath};
+ delete childEnv.CODEX_QUOTA_LAUNCH_ID;
+ const child=spawn(backendPath,[...backendArgs,...args],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:childEnv});
  child.stderr.pipe(process.stderr);
  let closed=false,ready=false,service=null,connecting=null,connectingSocket=null;const pending=new Map(),approval=new Map(),prefix='qg-internal:'+randomUUID()+':';let sequence=0;
  function journal(name,event){const fd=fs.openSync(path.join(home,name),'a',0o600);try{fs.writeFileSync(fd,JSON.stringify(event)+'\n');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}}
@@ -30,11 +34,21 @@ export async function runBridge(args,{backendPath=process.env.CODEX_QUOTA_REAL_C
      else if(req.method==='engine.active'){const {data}=await call('thread/loaded/list');r=(await Promise.all(data.map(async id=>{const t=await inspect(id);return t.active&&t.latestTurn?.status==='inProgress'?{id,turnId:t.latestTurn.id,approvalWaiting:t.approvalWaiting,child:t.child}:null;}))).filter(Boolean);}
      else throw new Error('Unknown request');p.reply(req,r);
     }catch(e){try{p.reject(req,e);}catch{}}});
-    await p.call('hello',{token,role:'bridge',engineKey},gateMs);await p.call('guard.ready',{},10000);if(closed)throw Error('Bridge closed');service=p;p.on('disconnect',()=>{if(service===p)service=null;});return p;
+    await p.call('hello',{token,role:'bridge',engineKey},gateMs);
+    await p.call('guard.ready',{},10000);
+    if(closed)throw Error('Bridge closed');
+    if(sessionId){
+     // Require a round trip through the desktop's initialized backend before
+     // confirming this launch. A simulator/preflight never announces a session.
+     await call('configRequirements/read',{},5000);
+     await p.call('guard.connected',{sessionId},2000);
+    }
+    if(closed)throw Error('Bridge closed');
+    service=p;p.on('disconnect',()=>{if(service===p)service=null;});return p;
    }catch(e){socket?.destroy();p?.fail(e);throw e;}
   })().finally(()=>{connecting=null;connectingSocket=null;});return connecting;
  }
- function notify(method,params={}){if(ready&&!closed)connect().then(p=>p.call(method,params,5000)).catch(()=>{});}
+ function notify(method,params={}){if(ready&&!closed&&!preflight)connect().then(p=>p.call(method,params,5000)).catch(()=>{});}
  lines(child.stdout,line=>{let m;try{m=JSON.parse(line);}catch{output.write(line);return;}
   const own=pending.get(m.id);if(own){clearTimeout(own.timer);pending.delete(m.id);m.error?own.reject(Object.assign(new Error(m.error.message),m.error)):own.resolve(m.result);return;}
   // Late internal replies are never exposed as desktop responses.
@@ -59,7 +73,7 @@ export async function runBridge(args,{backendPath=process.env.CODEX_QUOTA_REAL_C
   }
   child.stdin.write(line);
  }).catch(()=>{if(!child.stdin.destroyed)child.stdin.write(line);});},()=>{chain.finally(()=>child.stdin.end());});
- const heartbeat=setInterval(()=>{if(ready&&!closed)connect().catch(()=>{});},1000);heartbeat.unref();
+ const heartbeat=setInterval(()=>{if(ready&&!closed&&!preflight)connect().catch(()=>{});},1000);heartbeat.unref();
  function close(){if(closed)return;closed=true;clearInterval(heartbeat);connectingSocket?.destroy();service?.output.destroy();for(const p of pending.values()){clearTimeout(p.timer);p.reject(new Error('Engine exited'));}pending.clear();}
  child.on('close',code=>{close();if(input===process.stdin){input.destroy();output.end();process.exitCode=code??1;}});child.stdin.on('error',()=>{});child.on('error',()=>{close();if(input===process.stdin){input.destroy();process.exitCode=1;}});
  return {child,close,call};

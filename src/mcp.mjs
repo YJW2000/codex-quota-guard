@@ -17,7 +17,7 @@ export function serveMcp(input = process.stdin, output = process.stdout) {
   peer.on('message', async request => {
     try {
       if (request.id === undefined) return;
-      if (request.method === 'initialize') peer.reply(request, { protocolVersion: ['2024-11-05', '2025-03-26', '2025-06-18'].includes(request.params?.protocolVersion) ? request.params.protocolVersion : '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'codex-quota-guard', version: '0.3.0' } });
+      if (request.method === 'initialize') peer.reply(request, { protocolVersion: ['2024-11-05', '2025-03-26', '2025-06-18'].includes(request.params?.protocolVersion) ? request.params.protocolVersion : '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'codex-quota-guard', version: '0.4.0' } });
       else if (request.method === 'ping') peer.reply(request, {});
       else if (request.method === 'tools/list') peer.reply(request, { tools: tools.map(({ command, ...tool }) => tool) });
       else if (request.method === 'tools/call') {

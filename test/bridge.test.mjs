@@ -15,10 +15,10 @@ import {Peer} from '../src/rpc.mjs';
 import {testHome,cleanHome,usage} from './helpers.mjs';
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn){for(let i=0;i<150;i++){if(await fn())return;await wait(20);}throw Error('Condition not reached');}
-async function setup(t,{daemon=false,gateMs=300}={}){
+async function setup(t,{daemon=false,gateMs=300,mailTransport}={}){
  const home=testHome(),input=new PassThrough(),output=new PassThrough();let d;
  const reader=new EventEmitter();reader.read=async()=>usage();reader.close=()=>{};
- if(daemon)d=await runDaemon({home,reader});
+ if(daemon)d=await runDaemon({home,reader,mailTransport});
  const b=await runBridge(['app-server'],{home,input,output,gateMs,backendPath:process.execPath,backendArgs:[path.join(ROOT,'test/fixtures/guard-engine.mjs')]});
  const peer=new Peer(output,input);
  t.after(async()=>{input.end();b.close();b.child.kill();await wait(50);await d?.shutdown();cleanHome(home);});
@@ -37,11 +37,13 @@ test('EOF drains backend output including a final line without newline; backend 
  assert.equal((await closed)[0],7);assert.match(raw,/末行不带换行/);assert.ok(raw.endsWith('}}'));
 });
 test('real pipe: pause all, queue once, resume once, daemon death fail-open and reconnect',async t=>{
- const {peer,home,d}=await setup(t,{daemon:true});
+ const mail=[];
+ const {peer,home,d}=await setup(t,{daemon:true,mailTransport:{send:async message=>mail.push(message)}});
  await peer.call('test/set',{used:98,threads:['a','b']});
  await until(async()=> (await control('guard.status',{}, {home})).pendingCount===2);
  await assert.rejects(peer.call('turn/start',{threadId:'queued',clientUserMessageId:'once',input:[{type:'text',text:'继续'}]}),e=>e.data?.type==='quota_guard_paused');
  await until(async()=> (await control('guard.status',{}, {home})).pendingCount===3);
+ assert.equal(mail.length,1);assert.match(mail[0].subject,/5 小时/);
  await peer.call('test/set',{used:1});await until(async()=> (await control('guard.status',{}, {home})).pendingCount===0);
  let state=await peer.call('test/state');assert.equal(state.calls.filter(x=>x==='turn/interrupt').length,2);assert.equal(state.calls.filter(x=>x==='turn/start').length,3);
  // Completed client IDs return the cached result instead of starting a second turn.

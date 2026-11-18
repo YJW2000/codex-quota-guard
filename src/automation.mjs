@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { advanceLowEpisode } from './alert-events.mjs';
 import { evaluateQuota, validateConfig } from './quota.mjs';
 
 export const MODEL_ACTIONS = new Set(['turn/start', 'turn/steer', 'turn/addUserMessage', 'thread/queue/start', 'review/start', 'thread/compact/start', 'thread/startAeon']);
@@ -23,7 +24,15 @@ export class Controller {
     if (!accountId) throw new Error('额度响应缺少账号标识');
     adapter.accountId = accountId;
     const raw = evaluateQuota(snapshot, this.config, this.now());
-    const policy = {...raw,state:raw.state==='available'?'running':raw.state==='low'?'paused':'unknown'};
+    let state = 'unknown';
+    if (raw.fiveHour.state === 'low') state = 'paused';
+    else if (raw.fiveHour.state === 'available' && raw.usageAllowed) state = 'running';
+    const episodes = this.store.data.pauseEpisodes ??= {};
+    const accountKey = createHash('sha256').update(accountId).digest('hex');
+    const episode = advanceLowEpisode(episodes[accountKey], raw.fiveHour);
+    if (episode) episodes[accountKey] = episode;
+    else delete episodes[accountKey];
+    const policy = {...raw, state, episodeId: episode?.id};
     this.quotas.set(accountId, policy);
     return policy;
   }
@@ -61,6 +70,13 @@ export class Controller {
     // Compaction can be repeated explicitly, but never manufacture an empty user prompt.
     const job = { id: randomUUID(), accountId, engineKey: adapter.engineKey, adapterId: adapter.id, threadId: params.threadId,
       kind: 'request', method: message.method, params, key, state, createdAt: this.now() };
+    const policy = this.policy(accountId);
+    if (policy.state === 'paused') {
+      const {remainingPercent, resetsAt, limitId} = policy.fiveHour;
+      const alert = {at: job.createdAt, remainingPercent, resetsAt, limitId, episodeId: policy.episodeId};
+      if (state === 'proposed') job.proposedPauseAlert = alert;
+      else job.pauseAlert = alert;
+    }
     this.store.data.jobs.push(job); this.changed(); return job;
   }
   async tick() {
@@ -92,7 +108,8 @@ export class Controller {
       let threads;const observedAt=this.now();
       try { threads = await adapter.listActive(); } catch (error) { this.store.data.lastError = `任务检查失败：${error.message}`; continue; }
       for (const thread of threads) {
-        if (!this.config.enabled || !this.adapters.has(adapter.id) || this.policy(adapter.accountId).state !== 'paused') break;
+        const policy = this.policy(adapter.accountId);
+        if (!this.config.enabled || !this.adapters.has(adapter.id) || policy.state !== 'paused') break;
         if (!thread.turnId) continue;
         let job = this.store.data.jobs.find(j => j.accountId === adapter.accountId && j.threadId === thread.id && j.turnId === thread.turnId && !['done', 'canceled'].includes(j.state));
         if (!job) {
@@ -104,6 +121,9 @@ export class Controller {
         if (job.state !== 'interrupting') continue;
         try {
           await adapter.call('turn/interrupt', { threadId: thread.id, turnId: thread.turnId });
+          if (job.state !== 'interrupting') continue;
+          const {remainingPercent, resetsAt, limitId} = policy.fiveHour;
+          job.pauseAlert = {at: this.now(), remainingPercent, resetsAt, limitId, episodeId: policy.episodeId};
           job.state = 'pending'; this.changed();
         } catch (error) { job.reason = `中断待确认：${error.message}`; this.changed(); }
       }
