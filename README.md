@@ -44,13 +44,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-guarded-code
 
 ## 邮件提醒
 
-守卫通过当前连接的 Gmail 向自己发送提醒。已确认中断或暂缓对话后发送五小时提醒，同一账号同一次低额度期间的多个任务合并提示。独立监控读到周窗口（10080 分钟）达到阈值时，即使桌面尚未连接也会发送周额度提醒，对话继续使用剩余周额度。服务只返回周窗口时，五小时状态显示暂不可用。
+守卫通过已绑定的 Gmail 发送五小时和周额度提醒，两类邮件使用同一个收件地址。首次绑定时默认发给自己。已确认中断或暂缓对话后发送五小时提醒，同一账号同一次低额度期间的多个任务合并提示。独立监控读到周窗口（10080 分钟）达到阈值时，即使桌面尚未连接也会发送周额度提醒，对话继续使用剩余周额度。服务只返回周窗口时，五小时状态显示暂不可用。
 
 安装后运行以下命令，核对并绑定当前 Gmail。绑定只读邮箱身份和工具可用性。触发提醒时，插件通过原版 CLI 的临时会话直接调用 Gmail 发信，内容仅含额度和时间信息。投递前失败会退避重试，发信结果不确定时在托盘“查看额度”中显示待核对。
 
 ```powershell
 node "$env:LOCALAPPDATA/CodexQuotaGuard/app/scripts/connect-gmail.mjs"
 ```
+
+如需将两类提醒都发往另一个邮箱，可用 `--recipient` 指定唯一收件人。将示例地址替换为自己的收件邮箱。
+
+```powershell
+node "$env:LOCALAPPDATA/CodexQuotaGuard/app/scripts/connect-gmail.mjs" --recipient "recipient@example.com"
+```
+
+同一 Gmail 账号再次无参绑定时会保留收件地址。切换 Gmail 账号后无参绑定会以新账号自身为收件人。
 
 ## 一键回退与恢复
 

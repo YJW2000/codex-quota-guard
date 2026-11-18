@@ -12,7 +12,7 @@ try{
  if(direct.status!==0||wrapped.status!==0||direct.stdout!==wrapped.stdout)throw new Error('Desktop startup configuration mismatch');
  JSON.parse(wrapped.stdout);
  child=spawn(bridge,['app-server'],{stdio:['pipe','pipe','ignore'],windowsHide:true,env});const p=new Peer(child.stdout,child.stdin);
- await p.call('initialize',{clientInfo:{name:'codex_quota_preflight',version:'0.4.0'}},12000);p.send({method:'initialized'});
+ await p.call('initialize',{clientInfo:{name:'codex_quota_preflight',version:'0.4.1'}},12000);p.send({method:'initialized'});
  await p.call('configRequirements/read',{},12000);await p.call('config/read',{},12000);
  ok=true;console.log(JSON.stringify({ok:true,startupConfig:true,initialize:true,configRequirements:true,configRead:true}));
 }catch(e){console.log(JSON.stringify({ok:false,error:e.message}));process.exitCode=1;}
